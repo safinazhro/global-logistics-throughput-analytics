@@ -5,7 +5,7 @@ import numpy as np
 # 1. Konfigurasi Tampilan Halaman Utama (Tema Executive Navy)
 st.set_page_config(
     page_title="Global Logistics Analytics Hub", 
-    page_icon="🚢", 
+    page_icon="https://icons8.com", 
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -39,8 +39,7 @@ def load_and_process_data():
 
 df = load_and_process_data()
 
-# 3. Sidebar untuk Filter Data (Fitur yang sangat disukai Manajer Senior)
-st.sidebar.image("https://icons8.com", width=80)
+# 3. Sidebar untuk Filter Data (Fitur Kontrol Manajemen)
 st.sidebar.title("Control Tower Filters")
 st.sidebar.markdown("Filter performa berdasarkan parameter operasional.")
 
@@ -55,7 +54,7 @@ filtered_df = df[df['cargo_type'].isin(cargo_filter)]
 
 # 4. Bagian Header Utama
 st.title("GLOBAL LOGISTICS THROUGHPUT ANALYTICS")
-st.markdown("### `Control Tower Dashboard v1.2` | Operational & Resource Optimization Hub")
+st.markdown("### Control Tower Dashboard v1.2 | Operational & Resource Optimization Hub")
 st.markdown("---")
 
 # 5. Baris KPI (Key Performance Indicators) Utama Berbasis Bisnis
@@ -63,24 +62,23 @@ col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     st.markdown('<div class="kpi-card">', unsafe_allowed_html=True)
-    st.metric("Volume Throughput", f"{filtered_df['volume_cbm'].sum():,.0f} m³", help="Total kapasitas muatan yang berhasil diproses")
+    st.metric("Volume Throughput", f"{filtered_df['volume_cbm'].sum():,.0f} m³")
     st.markdown('</div>', unsafe_allowed_html=True)
 
 with col2:
     st.markdown('<div class="kpi-card">', unsafe_allowed_html=True)
-    st.metric("Avg Turnaround Time", f"{filtered_df['duration_hours'].mean():.2f} Hours", help="Rata-rata waktu pembongkaran kontainer")
+    st.metric("Avg Turnaround Time", f"{filtered_df['duration_hours'].mean():.2f} Hours")
     st.markdown('</div>', unsafe_allowed_html=True)
 
 with col3:
     st.markdown('<div class="kpi-card">', unsafe_allowed_html=True)
-    st.metric("Labor Efficiency", f"{filtered_df['cbm_per_man_hour'].mean():.2f} m³/Hr", help="Rasio produktivitas volume per man-hour")
+    st.metric("Labor Efficiency", f"{filtered_df['cbm_per_man_hour'].mean():.2f} m³/Hr")
     st.markdown('</div>', unsafe_allowed_html=True)
 
 with col4:
     st.markdown('<div class="kpi-card">', unsafe_allowed_html=True)
-    # Metrik finansial penentu keputusan manajemen
     total_penalty = filtered_df['demurrage_cost'].sum()
-    st.metric("Potential Demurrage Penalty", f"Rp {total_penalty:,.0f}", delta=f"Risk Detected" if total_penalty > 0 else "Optimal", delta_color="inverse")
+    st.metric("Potential Demurrage Penalty", f"Rp {total_penalty:,.0f}")
     st.markdown('</div>', unsafe_allowed_html=True)
 
 st.markdown("<br>", unsafe_allowed_html=True)
@@ -95,18 +93,18 @@ with col_left:
     
     st.markdown("""
     <div class="insight-box">
-        <strong> Insight Analis:</strong> Kargo jenis <code>Hazardous</code> memiliki tingkat efisiensi terendah karena protokol regulasi yang ketat. Penambahan alat bantu mekanis direkomendasikan untuk menaikkan rasio m³/jam-orang.
+        <strong>Insight Analis:</strong> Kargo jenis <code>Hazardous</code> memiliki tingkat efisiensi terendah karena protokol regulasi yang ketat. Penambahan alat bantu mekanis direkomendasikan untuk menaikkan rasio m³/jam-orang.
     </div>
     """, unsafe_allowed_html=True)
 
 with col_right:
-    st.subheader(" Bottleneck Analisis: Waktu Proses vs Jumlah Staf")
+    st.subheader("Bottleneck Analisis: Waktu Proses vs Jumlah Staf")
     labor_bottleneck = filtered_df.groupby('labor_assigned')['duration_hours'].mean()
     st.line_chart(labor_bottleneck, color="#F15BB5")
     
     st.markdown("""
     <div class="insight-box">
-        <strong> Deteksi Bottleneck:</strong> Penugasan hanya 2-3 pekerja per kontainer membuat durasi pembongkaran melonjak tajam melewati batas aman 2 jam. Alokasi optimal berada pada titik minimal 4 staf per unit kargo.
+        <strong>Deteksi Bottleneck:</strong> Penugasan hanya 2-3 pekerja per kontainer membuat durasi pembongkaran melonjak tajam melewati batas aman 2 jam. Alokasi optimal berada pada titik minimal 4 staf per unit kargo.
     </div>
     """, unsafe_allowed_html=True)
 
