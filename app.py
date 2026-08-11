@@ -220,16 +220,16 @@ if page == "Overview":
     pct_affected = (filtered_df["demurrage_penalty_usd"] > 0).mean() * 100
 
     kpi_data = [
-        ("Total Truk Diproses", f"{total_trucks:,}"),
-        ("Total Denda Demurrage", format_usd(total_demurrage)),
-        ("Rata-rata Dwell Time", f"{avg_dwell:.2f} jam"),
-        ("Persentase Pengiriman Terdampak Denda", f"{pct_affected:.1f}%"),
+        ("Total Truk Diproses", f"{total_trucks:,}", "Jumlah truk yang diproses fasilitas sesuai rentang tanggal dan filter yang dipilih."),
+        ("Total Denda Demurrage", format_usd(total_demurrage), "Total biaya denda yang timbul karena truk melebihi batas waktu bebas (free time allowance) kontraktual."),
+        ("Rata-rata Dwell Time", f"{avg_dwell:.2f} jam", "Rata-rata waktu truk berada di fasilitas, dihitung dari saat masuk gerbang (gate-in) hingga keluar gerbang (gate-out)."),
+        ("Pengiriman Terdampak Denda", f"{pct_affected:.1f}%", "Persentase pengiriman yang dwell time-nya melebihi batas waktu bebas sehingga dikenai denda demurrage."),
     ]
     kpi_cols = st.columns(4)
-    for col, (label, value) in zip(kpi_cols, kpi_data):
+    for col, (label, value, help_text) in zip(kpi_cols, kpi_data):
         with col:
             with st.container(border=True):
-                st.metric(label, value)
+                st.metric(label, value, help=help_text)
 
     st.divider()
 
@@ -240,6 +240,9 @@ if page == "Overview":
         volume_by_shift = (
             filtered_df.groupby("shift", observed=True).size().reset_index(name="total_trucks")
         )
+        volume_by_shift["pct_of_total"] = (
+            volume_by_shift["total_trucks"] / volume_by_shift["total_trucks"].sum() * 100
+        )
         volume_by_shift = order_categorical(volume_by_shift, "shift", SHIFT_ORDER)
         fig_volume = px.bar(
             volume_by_shift,
@@ -248,10 +251,16 @@ if page == "Overview":
             color="shift",
             color_discrete_map=SHIFT_COLOR_MAP,
             labels={"shift": "Shift", "total_trucks": "Jumlah Truk"},
+            custom_data=["pct_of_total"],
+        )
+        fig_volume.update_traces(
+            hovertemplate="<b>%{x}</b><br>%{y:,} truk (%{customdata[0]:.1f}% dari total)<extra></extra>"
         )
         fig_volume.update_layout(showlegend=False)
         apply_professional_layout(fig_volume)
         st.plotly_chart(fig_volume, width="stretch")
+        top_shift = volume_by_shift.loc[volume_by_shift["total_trucks"].idxmax(), "shift"]
+        st.caption(f"Insight: {top_shift} menerima volume truk tertinggi pada periode yang dipilih.")
 
     with right_col:
         st.subheader("Tren Denda Demurrage Harian")
@@ -268,13 +277,22 @@ if page == "Overview":
             labels={"date": "Tanggal", "demurrage_penalty_usd": "Total Denda (USD)"},
             color_discrete_sequence=[COLOR_STEEL_BLUE],
         )
+        fig_trend.update_traces(
+            hovertemplate="<b>%{x|%d %b %Y}</b><br>Denda: USD %{y:,.0f}<extra></extra>"
+        )
         apply_professional_layout(fig_trend)
         st.plotly_chart(fig_trend, width="stretch")
+        peak_row = daily_demurrage.loc[daily_demurrage["demurrage_penalty_usd"].idxmax()]
+        st.caption(
+            f"Insight: puncak denda harian terjadi pada {peak_row['date'].strftime('%d %b %Y')} "
+            f"sebesar {format_usd(peak_row['demurrage_penalty_usd'])}."
+        )
 
     st.subheader("Distribusi Kargo yang Diproses")
     cargo_dist = (
         filtered_df.groupby("cargo_type", observed=True).size().reset_index(name="total_shipments")
     )
+    cargo_dist["pct_of_total"] = cargo_dist["total_shipments"] / cargo_dist["total_shipments"].sum() * 100
     fig_cargo_dist = px.pie(
         cargo_dist,
         names="cargo_type",
@@ -283,7 +301,16 @@ if page == "Overview":
         color_discrete_map=CARGO_COLOR_MAP,
         hole=0.4,
     )
+    fig_cargo_dist.update_traces(
+        hovertemplate="<b>%{label}</b><br>%{value:,} pengiriman (%{percent})<extra></extra>"
+    )
+    apply_professional_layout(fig_cargo_dist)
     st.plotly_chart(fig_cargo_dist, width="stretch")
+    dominant_cargo = cargo_dist.loc[cargo_dist["total_shipments"].idxmax()]
+    st.caption(
+        f"Insight: {dominant_cargo['cargo_type']} mendominasi volume pengiriman "
+        f"({dominant_cargo['pct_of_total']:.1f}% dari total)."
+    )
 
 
 # HALAMAN 2: SHIFT AND LABOR ANALYSIS
@@ -332,9 +359,17 @@ elif page == "Shift and Labor Analysis":
             color_discrete_map=SHIFT_COLOR_MAP,
             labels={"shift": "Shift", "trucks_per_worker": "Truk per Pekerja"},
         )
+        fig_ratio.update_traces(
+            hovertemplate="<b>%{x}</b><br>%{y:.2f} truk per pekerja<extra></extra>"
+        )
         fig_ratio.update_layout(showlegend=False)
         apply_professional_layout(fig_ratio)
         st.plotly_chart(fig_ratio, width="stretch")
+        busiest_row = shift_summary.loc[shift_summary["trucks_per_worker"].idxmax()]
+        st.caption(
+            f"Insight: {busiest_row['shift']} memiliki beban kerja tertinggi, "
+            f"{busiest_row['trucks_per_worker']:.2f} truk per pekerja."
+        )
 
     with col2:
         st.subheader("Indeks Kongesti Rata-rata per Shift")
@@ -346,6 +381,9 @@ elif page == "Shift and Labor Analysis":
             color_discrete_map=SHIFT_COLOR_MAP,
             labels={"shift": "Shift", "avg_congestion_index": "Indeks Kongesti"},
         )
+        fig_congestion.update_traces(
+            hovertemplate="<b>%{x}</b><br>Indeks kongesti: %{y:.2f}<extra></extra>"
+        )
         fig_congestion.update_layout(showlegend=False)
         fig_congestion.add_hline(
             y=1.0,
@@ -355,6 +393,15 @@ elif page == "Shift and Labor Analysis":
         )
         apply_professional_layout(fig_congestion)
         st.plotly_chart(fig_congestion, width="stretch")
+        over_capacity = shift_summary[shift_summary["avg_congestion_index"] > 1.0]
+        if not over_capacity.empty:
+            worst_row = over_capacity.loc[over_capacity["avg_congestion_index"].idxmax()]
+            st.caption(
+                f"Insight: {worst_row['shift']} beroperasi di atas kapasitas ideal "
+                f"(indeks {worst_row['avg_congestion_index']:.2f}, batas ideal 1.00)."
+            )
+        else:
+            st.caption("Insight: seluruh shift beroperasi dalam batas kapasitas ideal.")
 
     st.subheader("Hubungan Indeks Kongesti terhadap Dwell Time")
     sample_size = min(3000, len(filtered_df))
@@ -371,8 +418,16 @@ elif page == "Shift and Labor Analysis":
             "dwell_time_hours": "Dwell Time (Jam)",
         },
     )
+    fig_scatter.update_traces(
+        hovertemplate="Indeks kongesti: %{x:.2f}<br>Dwell time: %{y:.2f} jam<extra></extra>"
+    )
     apply_professional_layout(fig_scatter)
     st.plotly_chart(fig_scatter, width="stretch")
+    corr_value = filtered_df["shift_congestion_index"].corr(filtered_df["dwell_time_hours"])
+    st.caption(
+        f"Insight: korelasi indeks kongesti terhadap dwell time sebesar {corr_value:.2f} "
+        "-- semakin tinggi kongesti, semakin lama truk tertahan di fasilitas."
+    )
 
     st.subheader("Distribusi Dwell Time per Shift")
     fig_box = px.box(
@@ -382,6 +437,9 @@ elif page == "Shift and Labor Analysis":
         color="shift",
         color_discrete_map=SHIFT_COLOR_MAP,
         labels={"shift": "Shift", "dwell_time_hours": "Dwell Time (Jam)"},
+    )
+    fig_box.update_traces(
+        hovertemplate="<b>%{x}</b><br>Dwell time: %{y:.2f} jam<extra></extra>"
     )
     fig_box.update_layout(showlegend=False)
     apply_professional_layout(fig_box)
@@ -432,9 +490,17 @@ elif page == "Cargo Risk Breakdown":
             color_discrete_map=CARGO_COLOR_MAP,
             labels={"cargo_type": "Jenis Kargo", "total_demurrage_usd": "Total Denda (USD)"},
         )
+        fig_total_demurrage.update_traces(
+            hovertemplate="<b>%{x}</b><br>Total denda: USD %{y:,.0f}<extra></extra>"
+        )
         fig_total_demurrage.update_layout(showlegend=False)
         apply_professional_layout(fig_total_demurrage)
         st.plotly_chart(fig_total_demurrage, width="stretch")
+        top_cargo_cost = cargo_summary.loc[cargo_summary["total_demurrage_usd"].idxmax()]
+        st.caption(
+            f"Insight: {top_cargo_cost['cargo_type']} menyumbang denda terbesar, "
+            f"{format_usd(top_cargo_cost['total_demurrage_usd'])} pada periode ini."
+        )
 
     with col2:
         st.subheader("Persentase Pengiriman Terdampak Denda")
@@ -446,9 +512,17 @@ elif page == "Cargo Risk Breakdown":
             color_discrete_map=CARGO_COLOR_MAP,
             labels={"cargo_type": "Jenis Kargo", "pct_shipments_delayed": "Persentase Terdampak (%)"},
         )
+        fig_pct_delayed.update_traces(
+            hovertemplate="<b>%{x}</b><br>%{y:.1f}% pengiriman terdampak denda<extra></extra>"
+        )
         fig_pct_delayed.update_layout(showlegend=False)
         apply_professional_layout(fig_pct_delayed)
         st.plotly_chart(fig_pct_delayed, width="stretch")
+        riskiest_cargo = cargo_summary.loc[cargo_summary["pct_shipments_delayed"].idxmax()]
+        st.caption(
+            f"Insight: {riskiest_cargo['cargo_type']} punya risiko keterlambatan tertinggi, "
+            f"{riskiest_cargo['pct_shipments_delayed']:.1f}% pengirimannya kena denda."
+        )
 
     st.subheader("Demurrage per Kombinasi Shift dan Jenis Kargo")
     heatmap_data = filtered_df.pivot_table(
@@ -468,8 +542,18 @@ elif page == "Cargo Risk Breakdown":
         aspect="auto",
         color_continuous_scale=SEQUENTIAL_BLUE_SCALE,
     )
+    fig_heatmap.update_traces(
+        hovertemplate="Shift: %{x}<br>Kargo: %{y}<br>Rata-rata denda: USD %{z:,.1f}<extra></extra>"
+    )
     apply_professional_layout(fig_heatmap)
     st.plotly_chart(fig_heatmap, width="stretch")
+    heatmap_stacked = heatmap_data.stack()
+    if not heatmap_stacked.empty:
+        worst_combo = heatmap_stacked.idxmax()
+        st.caption(
+            f"Insight: kombinasi risiko tertinggi ada pada {worst_combo[1]} dengan kargo "
+            f"{worst_combo[0]}, rata-rata denda {format_usd(heatmap_stacked.max())} per pengiriman."
+        )
 
 
 # HALAMAN 4: FINANCIAL IMPACT AND RECOMMENDATION
@@ -487,15 +571,15 @@ elif page == "Financial Impact and Recommendation":
     projected_annual = daily_avg_demurrage * 365
 
     top_kpi_data = [
-        ("Total Denda pada Periode Terpilih", format_usd(total_demurrage)),
-        ("Rata-rata Denda per Hari", format_usd(daily_avg_demurrage)),
-        ("Proyeksi Denda per Tahun", format_usd(projected_annual)),
+        ("Total Denda pada Periode Terpilih", format_usd(total_demurrage), "Total denda demurrage untuk seluruh data yang cocok dengan filter saat ini."),
+        ("Rata-rata Denda per Hari", format_usd(daily_avg_demurrage), "Total denda dibagi jumlah hari pada rentang tanggal yang dipilih."),
+        ("Proyeksi Denda per Tahun", format_usd(projected_annual), "Rata-rata denda harian diproyeksikan linear ke 365 hari, sebagai estimasi arah, bukan angka final."),
     ]
     top_kpi_cols = st.columns(3)
-    for col, (label, value) in zip(top_kpi_cols, top_kpi_data):
+    for col, (label, value, help_text) in zip(top_kpi_cols, top_kpi_data):
         with col:
             with st.container(border=True):
-                st.metric(label, value)
+                st.metric(label, value, help=help_text)
 
     st.divider()
     st.subheader("Simulasi: Dampak Penambahan Tenaga Kerja pada Shift Tertentu")
@@ -546,15 +630,15 @@ elif page == "Financial Impact and Recommendation":
         savings_pct = (savings / old_total * 100) if old_total > 0 else 0.0
 
         sim_kpi_data = [
-            (f"Denda Saat Ini ({sim_shift})", format_usd(old_total), None),
-            ("Estimasi Denda Setelah Penambahan Tenaga Kerja", format_usd(new_total), None),
-            ("Estimasi Penghematan", format_usd(savings), f"{savings_pct:.1f}%"),
+            ("Denda Saat Ini", format_usd(old_total), None, f"Total denda demurrage untuk {sim_shift} pada kondisi staffing saat ini."),
+            ("Estimasi Setelah Rebalancing", format_usd(new_total), None, f"Estimasi denda {sim_shift} jika tenaga kerja ditambah {labor_increase_pct}%."),
+            ("Estimasi Penghematan", format_usd(savings), f"{savings_pct:.1f}%", "Selisih antara kondisi saat ini dan estimasi setelah penambahan tenaga kerja."),
         ]
         sim_kpi_cols = st.columns(3)
-        for col, (label, value, delta) in zip(sim_kpi_cols, sim_kpi_data):
+        for col, (label, value, delta, help_text) in zip(sim_kpi_cols, sim_kpi_data):
             with col:
                 with st.container(border=True):
-                    st.metric(label, value, delta=delta)
+                    st.metric(label, value, delta=delta, help=help_text)
 
         comparison_df = pd.DataFrame(
             {
@@ -569,9 +653,19 @@ elif page == "Financial Impact and Recommendation":
             color="Skenario",
             color_discrete_sequence=[COLOR_ALERT_RED, COLOR_TEAL],
         )
+        fig_comparison.update_traces(
+            hovertemplate="<b>%{x}</b><br>Total denda: USD %{y:,.0f}<extra></extra>"
+        )
         fig_comparison.update_layout(showlegend=False)
         apply_professional_layout(fig_comparison)
         st.plotly_chart(fig_comparison, width="stretch")
+        if savings > 0:
+            st.caption(
+                f"Insight: menambah tenaga kerja {sim_shift} sebesar {labor_increase_pct}% "
+                f"berpotensi menghemat {format_usd(savings)} ({savings_pct:.1f}%) pada periode ini."
+            )
+        else:
+            st.caption("Insight: pada skenario ini, penambahan tenaga kerja belum menunjukkan penghematan yang berarti.")
 
     st.divider()
     st.subheader("Ringkasan Rekomendasi")
